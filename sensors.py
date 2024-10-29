@@ -12,7 +12,7 @@ class LidarSensor:
         self.robot = robot
         self.num_rays = num_rays
         self.max_distance = max_distance
-        self.fov = fov
+        self.fov = math.radians(fov)
         self.point_life = point_life
         self.measurement_error = measurement_error
         self.ray_angles = []
@@ -26,7 +26,7 @@ class LidarSensor:
         """
         start_angle = -self.fov / 2
         angle_increment = self.fov / self.num_rays
-        self.ray_angles = [math.radians(start_angle + i * angle_increment) for i in range(self.num_rays)]
+        self.ray_angles = [start_angle + i * angle_increment for i in range(self.num_rays)]
 
     def update(self, map_surface):
         """
@@ -69,7 +69,7 @@ class LidarSensor:
                 y = self.robot.y - measured_distance * cos_angle
 
                 # Store the reading with error
-                self.readings.append({'position': (x, y), 'error': measured_distance - distance})
+                self.readings.append({'position': (x, y), 'error': measured_distance - distance, 'distance': measured_distance})
 
                 # Add the hit point with an initial age of 0
                 self.hit_points.append({'position': (x, y), 'age': 0})
@@ -77,7 +77,7 @@ class LidarSensor:
                 # No hit within max_distance
                 x = self.robot.x + self.max_distance * sin_angle
                 y = self.robot.y - self.max_distance * cos_angle
-                self.readings.append({'position': (x, y), 'error': None})
+                self.readings.append({'position': (x, y), 'error': None, 'distance': None})
 
         # Update the ages of the hit points
         for point in self.hit_points:
@@ -107,3 +107,12 @@ class LidarSensor:
             point_surface = pygame.Surface((4, 4), pygame.SRCALPHA)
             pygame.draw.circle(point_surface, point_color, (2, 2), 2)
             surface.blit(point_surface, (int(point['position'][0]) - 2, int(point['position'][1]) - 2))
+
+    def get_measurements(self):
+        """
+        Return the sensor measurements needed for the particle filter.
+        """
+        measurements = []
+        for reading in self.readings:
+            measurements.append({'distance': reading['distance']})
+        return measurements
