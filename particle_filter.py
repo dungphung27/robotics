@@ -1,153 +1,126 @@
-# particle_filter.py
-
-import random
-import math
 import numpy as np
-import pygame
-
-class Particle:
-    def __init__(self, x, y, theta, weight=1.0):
-        self.x = x
-        self.y = y
-        self.theta = theta
-        self.weight = weight
+from config import NUM_RAYS, LIDAR_RANGE, LIDAR_NOISE_STD
+from joblib import Parallel, delayed
+import cv2
+from numba import njit
 
 class ParticleFilter:
-    def __init__(self, num_particles, map_surface, robot, sensor_range, sensor_fov):
+    def __init__(self, num_particles,map_img,initial_pos):
         self.num_particles = num_particles
-        self.map_surface = map_surface
-        self.robot = robot
-        self.sensor_range = sensor_range
-        self.sensor_fov = sensor_fov
-        self.particles = []
-        self.init_particles()
+        self.particles = np.empty((num_particles, 3))  # Each particle has x, y, theta
         self.weights = np.ones(self.num_particles) / self.num_particles
+        self.initialize_particles(map_img)
+        self.estimated_path = []  # Store estimated positions
+        self.estimated_position = (0,0)
 
-    def init_particles(self):
-        self.particles = []
-        map_width, map_height = self.map_surface.get_size()
-        while len(self.particles) < self.num_particles:
-            x = random.uniform(0, map_width)
-            y = random.uniform(0, map_height)
-            theta = random.uniform(-math.pi, math.pi)
-            # Check if the particle is in a free space
-            if self.is_free_space(x, y):
-                self.particles.append(Particle(x, y, theta))
-
-    def is_free_space(self, x, y):
-        # Check if the position is within the map boundaries and not on an obstacle
-        if 0 <= int(x) < self.map_surface.get_width() and 0 <= int(y) < self.map_surface.get_height():
-            color = self.map_surface.get_at((int(x), int(y)))
-            return color == pygame.Color(255, 255, 255, 255)
-        return False
-
-    def predict(self, dt, control, motion_noise):
-        for particle in self.particles:
-            # Simulate motion with noise
-            v_l = control['v_l'] + random.gauss(0, motion_noise['v'])
-            v_r = control['v_r'] + random.gauss(0, motion_noise['v'])
-            v = (v_r + v_l) / 2
-            omega = -(v_r - v_l) / self.robot.L
-
-            # Update state
-            particle.x += v * math.sin(particle.theta) * dt
-            particle.y -= v * math.cos(particle.theta) * dt  # Subtract due to inverted y-axis
-            particle.theta += omega * dt
-
-            # Normalize theta
-            particle.theta = (particle.theta + math.pi) % (2 * math.pi) - math.pi
-
-    def update(self, sensor_measurements, sensor_noise):
-        weights = []
-        for particle in self.particles:
-            # Simulate sensor measurements from particle's position
-            simulated_measurements = self.simulate_lidar(particle)
-            # Compute weight based on similarity to actual measurements
-            weight = self.compute_weight(sensor_measurements, simulated_measurements, sensor_noise)
-            particle.weight = weight
-            weights.append(weight)
-        # Normalize weights
-        weights = np.array(weights)
-        sum_weights = np.sum(weights)
-        if sum_weights != 0:
-            weights /= sum_weights
+    def initialize_particles(self, map_img):
+    # --- Chuyển sang grayscale để dễ kiểm tra vùng trống ---
+        if len(map_img.shape) == 3:
+            gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY)
         else:
-            weights = np.ones(self.num_particles) / self.num_particles
-        self.weights = weights
+            gray = map_img.copy()
 
-    def compute_weight(self, actual_measurements, simulated_measurements, sensor_noise):
-        # Compare actual and simulated measurements
-        weight = 1.0
-        for a, s in zip(actual_measurements, simulated_measurements):
-            if a['distance'] is not None and s['distance'] is not None:
-                # Gaussian probability
-                error = a['distance'] - s['distance']
-                weight *= self.gaussian(0, sensor_noise, error)
-            else:
-                weight *= 0.1  # Low probability if no measurement
-        return weight
+        map_height, map_width = gray.shape[:2]
+        count = 0
+        max_tries = self.num_particles * 10  
 
-    def gaussian(self, mu, sigma, x):
-        # Gaussian probability density function
-        return math.exp(- ((mu - x) ** 2) / (2 * sigma ** 2)) / (sigma * math.sqrt(2 * math.pi))
+        while count < self.num_particles and max_tries > 0:
+            max_tries -= 1
+            px = np.random.uniform(0, map_width)
+            py = np.random.uniform(0, map_height)
 
-    def simulate_lidar(self, particle):
-        # Simulate LIDAR measurements from the particle's perspective
-        simulated_readings = []
-        for angle_offset in self.robot.lidar.ray_angles:
-            ray_angle = particle.theta + angle_offset
-            sin_angle = math.sin(ray_angle)
-            cos_angle = math.cos(ray_angle)
+            # --- Kiểm tra vùng trắng (vùng trống) ---
+            if gray[int(py), int(px)] > 250:
+                theta = 0
+                self.particles[count] = [px, py, theta]
+                count += 1
 
-            distance = 0
-            hit = False
-            step_size = 1
-            while distance < self.sensor_range:
-                distance += step_size
-                x = particle.x + distance * sin_angle
-                y = particle.y - distance * cos_angle  # Subtract due to inverted y-axis
+        if count < self.num_particles:
+            print(f"[Cảnh báo] Chỉ tạo được {count}/{self.num_particles} hạt hợp lệ!")
 
-                if 0 <= int(x) < self.map_surface.get_width() and 0 <= int(y) < self.map_surface.get_height():
-                    color = self.map_surface.get_at((int(x), int(y)))
-                    if color != pygame.Color(255, 255, 255, 255):
-                        hit = True
-                        break
-                else:
-                    break
+    def predict(self, v, omega, dt):
+        self.particles[:, 2] += omega * dt
+        self.particles[:, 0] += v * np.cos(self.particles[:, 2]) * dt * 50      
+        self.particles[:, 1] += v * np.sin(self.particles[:, 2]) * dt * 50
 
-            if hit:
-                simulated_readings.append({'distance': distance})
-            else:
-                simulated_readings.append({'distance': None})
-        return simulated_readings
+    def simulate_lidar(self, particles, img):
+        num_particles = particles.shape[0]
+        angles = np.linspace(0, 2 * np.pi, NUM_RAYS, endpoint=False)
+
+        # 🔹 Chuyển ảnh sang grayscale 1 lần duy nhất (không làm trong mỗi vòng lặp)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        def process_particle(i):
+            x, y, theta = particles[i]
+            total_angles = theta + angles
+            distances = np.array([
+                self.cast_ray(x, y, total_angle, img_gray)  # ✅ truyền ảnh xám
+                for total_angle in total_angles
+            ])
+            return distances
+
+        results = Parallel(n_jobs=7)(
+            delayed(process_particle)(i) for i in range(num_particles)
+        )
+        measurements = np.stack(results)
+        return measurements
+    def cast_ray(self, x0, y0, angle, img_gray):
+        LIDAR_RANGE_MIN = 0.11  # mét
+        LIDAR_RANGE_MAX = 3.5   # mét
+        SCALE = 50             # 1 mét = 100 px
+        step = 10               # bước quét (pixel)
+        max_dist_px = int(LIDAR_RANGE_MAX * SCALE)
+
+        h, w = img_gray.shape[:2]
+
+        for dist_px in range(0, max_dist_px, step):
+            x = int(x0 + np.cos(angle) * dist_px)
+            y = int(y0 + np.sin(angle) * dist_px)
+
+            # --- Nếu vượt biên, coi như gặp vật cản ---
+            if x < 0 or y < 0 or x >= w or y >= h:
+                dist_m = dist_px / SCALE
+                return dist_m if LIDAR_RANGE_MIN <= dist_m <= LIDAR_RANGE_MAX else 0.0
+
+            # --- Nếu gặp vật cản (pixel tối) ---
+            if img_gray[y, x] < 10:
+                dist_m = dist_px / SCALE
+                return dist_m if LIDAR_RANGE_MIN <= dist_m <= LIDAR_RANGE_MAX else 0.0
+
+        # --- Không gặp vật cản trong tầm quét ---
+        return 0.0
+    def update(self, robot_measurements,img):
+        # print("a")
+        particle_measurements = self.simulate_lidar(self.particles,img) * 50  # Chuyển sang cm
+        # Góc thực tế của mỗi phép đo
+        indices = np.linspace(0, len(robot_measurements) - 1, particle_measurements.shape[1]).astype(int)
+        robot_sampled = robot_measurements[indices]
+
+        mse = np.mean((particle_measurements - robot_sampled) ** 2, axis=1)
+        self.weights = np.exp(-mse / (200 * LIDAR_NOISE_STD ** 2))
+        self.weights += 1e-300  # Avoid zeros
+        self.weights /= sum(self.weights)
 
     def resample(self):
-        # Systematic resampling
+        # --- Systematic Resampling ---
+        N = self.num_particles
+        positions = (np.arange(N) + np.random.rand()) / N
         cumulative_sum = np.cumsum(self.weights)
-        step = 1.0 / self.num_particles
-        start = random.uniform(0, step)
-        positions = (start + np.arange(self.num_particles) * step) % 1.0
+        indices = np.zeros(N, dtype=int)
 
-        indexes = np.searchsorted(cumulative_sum, positions)
-        # Create new particles based on resampled indices
-        new_particles = []
-        for idx in indexes:
-            particle = self.particles[idx]
-            new_particle = Particle(particle.x, particle.y, particle.theta)
-            new_particles.append(new_particle)
-        self.particles = new_particles
+        i, j = 0, 0
+        while i < N:
+            if positions[i] < cumulative_sum[j]:
+                indices[i] = j
+                i += 1
+            else:
+                j += 1
+        # print(indices)
+        self.particles = self.particles[indices]
         self.weights = np.ones(self.num_particles) / self.num_particles
 
-    def estimate(self):
-        # Estimate the state as the mean of the particles
-        x = np.average([p.x for p in self.particles], weights=self.weights)
-        y = np.average([p.y for p in self.particles], weights=self.weights)
-        sin_thetas = np.average([math.sin(p.theta) for p in self.particles], weights=self.weights)
-        cos_thetas = np.average([math.cos(p.theta) for p in self.particles], weights=self.weights)
-        theta = math.atan2(sin_thetas, cos_thetas)
-        return x, y, theta
-
-    def draw(self, surface):
-        # Draw particles
-        for particle in self.particles:
-            pygame.draw.circle(surface, (0, 255, 0), (int(particle.x), int(particle.y)), 2)
+        # Estimate position (weighted mean trước khi reset)
+        x_estimate = np.mean(self.particles[:, 0])
+        y_estimate = np.mean(self.particles[:, 1])
+        self.estimated_position = (x_estimate, y_estimate)
+        self.estimated_path.append(self.estimated_position)

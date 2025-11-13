@@ -1,0 +1,52 @@
+[
+  {
+    "id": 1,
+    "title": "Giới thiệu chung",
+    "content": "Trường Đại học Bách khoa (BKĐN; tiếng Anh: Da Nang University of Science and Technology – DUT) là trường đại học đầu ngành về lĩnh vực kỹ thuật ở miền Trung Việt Nam, có trụ sở tại Đà Nẵng. Trường trực thuộc Đại học Đà Nẵng và được xếp vào nhóm các đại học trọng điểm quốc gia. DUT là trung tâm nghiên cứu khoa học kỹ thuật và chuyển giao công nghệ hàng đầu khu vực miền Trung."
+  },
+  {
+    "id": 2,
+    "title": "Thành tựu quốc tế",
+    "content": "Năm 2017, DUT trở thành một trong bốn trường đại học đầu tiên của Việt Nam đạt chuẩn quốc tế trong đào tạo và nghiên cứu do Hội đồng cấp cao đánh giá nghiên cứu và giáo dục đại học châu Âu (HCERES) công nhận."
+  },
+  {
+    "id": 3,
+    "title": "Lịch sử hình thành",
+    "content": "Trường Đại học Bách khoa Đà Nẵng tiền thân là Viện Đại học Đà Nẵng, được thành lập năm 1975 và chính thức mang tên Trường Đại học Bách khoa Đà Nẵng từ năm 1976."
+  },
+  {
+    "id": 4,
+    "title": "Giai đoạn 1975 – Viện Đại học Đà Nẵng",
+    "content": "Ngày 15 tháng 7 năm 1975, Viện Đại học Đà Nẵng được thành lập theo Quyết định số 66/QĐ của Ủy ban nhân dân cách mạng khu Trung Trung Bộ, bao gồm các khoa: Dự bị, Điện, Cơ khí và Kinh tế. Khu A hiện nay vốn là Đại chủng viện Hòa Bình, phân khoa Triết học của Đại chủng viện Xuân Bích Huế tại Đà Nẵng."
+  },
+  {
+    "id": 5,
+    "title": "Giai đoạn 1976–1993 – Trường Đại học Bách khoa Đà Nẵng",
+    "content": "Tháng 10 năm 1976, Thủ tướng Chính phủ ra Quyết định số 426/TTg thành lập trường Đại học Bách khoa Đà Nẵng trên cơ sở của Viện Đại học Đà Nẵng. Năm 1978 thành lập khoa Hóa; năm 1986, khoa Kinh tế tách ra thành phân hiệu Đại học Kinh tế Đà Nẵng; năm 1988 thành lập khoa Năng lượng."
+  },
+  {
+    "id": 6,
+    "title": "Địa chỉ và thông tin liên hệ",
+    "content": "Địa chỉ: 54 Nguyễn Lương Bằng, phường Hòa Khánh Bắc, quận Liên Chiểu, thành phố Đà Nẵng, Việt Nam. Website: https://dut.udn.vn/"
+  },
+  {
+    "id": 7,
+    "title": "Giới thiệu",
+    "content": "Tài liệu hướng dẫn tóm tắt về đăng ký học của Trường Đại học Bách khoa – Đại học Đà Nẵng. Sinh viên thực hiện đăng ký học trực tuyến tại các website: http://dk1.dut.udn.vn, http://dk2.dut.udn.vn, http://dk3.dut.udn.vn, http://dk4.dut.udn.vn."
+  },
+  {
+    "id": 8,
+    "title": "Nguyên tắc giai đoạn đăng ký",
+    "content": "1.1. Giai đoạn ĐK theo nhóm: Các lớp học phần mở chính khóa được gộp thành nhóm cơ bản. Khi hủy tất cả đăng ký thì toàn bộ dữ liệu bị xóa. Website chỉ hiển thị các học phần mà sinh viên đủ điều kiện học. Không cho phép đăng ký dự bị. Khi hủy một học phần thì học phần song hành cũng bị hủy nếu chưa học. 1.2. Giai đoạn ĐK theo khóa: Không có nút hủy tất cả đăng ký, không cho phép đăng ký tập hợp các lớp ghép nhóm, chỉ đăng ký từng lớp riêng lẻ. 1.3. Giai đoạn ĐK toàn trường hoặc Hiệu chỉnh đăng ký: Tương tự, không có hủy toàn bộ, chỉ đăng ký lớp riêng lẻ và cho phép đăng ký dự bị ở cuối giai đoạn."
+  },
+  {
+    "id": 9,
+    "title": "Trình tự thao tác đăng ký",
+    "content": "Giai đoạn ĐK theo nhóm: Chọn và đăng ký các lớp học phần ghép nhóm cơ bản, sau đó đăng ký các lớp học phần riêng lẻ. Có thể hủy đăng ký bằng cách kích nút Xóa. Giai đoạn ĐK theo khóa: chỉ đăng ký chính thức các lớp học phần riêng lẻ. Giai đoạn ĐK toàn trường hoặc Hiệu chỉnh: tương tự, nhưng cho phép đăng ký dự bị cho các lớp hết chỗ. Ghi chú: nút 'Ẩn học phần đã học' giúp ẩn lớp đã học, cột 'Phù hợp TKB' hiển thị dấu X cho lớp không trùng lịch."
+  },
+  {
+    "id": 10,
+    "title": "Ví dụ minh họa",
+    "content": "Minh họa đối với Khóa 2017 ngành Chế tạo máy: danh mục học phần và logic các học phần trong CTĐT học kỳ 2/2019–2020. Các hình minh họa mô tả các bước: chọn nhóm, xem chi tiết nhóm, đăng ký lớp học phần, xem kết quả cuối cùng ở giai đoạn ĐK theo nhóm."
+  }
+]
