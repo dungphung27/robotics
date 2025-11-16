@@ -154,14 +154,16 @@ class LidarMapper:
         cos_a = np.cos(angles)
         sin_a = np.sin(angles)
 
-        rx = int(self.CENTER[0] + self.x * self.SCALE)
-        ry = int(self.CENTER[1] - self.y * self.SCALE)
+        # Robot position (float)
+        rx_f = self.CENTER[0] + self.x * self.SCALE
+        ry_f = self.CENTER[1] - self.y * self.SCALE
 
-        if (rx < self.margin or ry < self.margin or
-            rx >= self.MAP_SIZE[1] - self.margin or
-            ry >= self.MAP_SIZE[0] - self.margin):
+        # Convert to int only for drawing
+        rx = int(rx_f)
+        ry = int(ry_f)
 
-            self.expand_map_if_needed(rx, ry)
+        # Expand map if needed
+        self.expand_map_if_needed(rx, ry)
 
         h, w = self.map_img.shape[:2]
 
@@ -169,11 +171,16 @@ class LidarMapper:
             if dist <= 0.02:
                 continue
 
+            # Compute hit point (float world -> float pixel)
             x_end = self.x + dist * cos_a[i]
             y_end = self.y + dist * sin_a[i]
 
-            ex = int(self.CENTER[0] + x_end * self.SCALE)
-            ey = int(self.CENTER[1] - y_end * self.SCALE)
+            ex_f = self.CENTER[0] + x_end * self.SCALE
+            ey_f = self.CENTER[1] - y_end * self.SCALE
+
+            # Only convert to int for drawing & boundary check
+            ex = int(ex_f)
+            ey = int(ey_f)
 
             if not (0 <= ex < w and 0 <= ey < h):
                 continue
@@ -196,10 +203,13 @@ class LidarMapper:
 
         self._cap_obstacles()
 
+
+
     def update_robot_state(self, v, angle):
         if abs(v) > 0.5:
             return
         self.theta = angle
+        print(f"🤖 Robot state update: v={v:.6f} m/s, θ={math.degrees(self.theta):.2f}°")
         self.x += v * math.cos(self.theta) * self.dt
         self.y -= v * math.sin(self.theta) * self.dt
 
@@ -223,6 +233,127 @@ class LidarMapper:
         cv2.circle(self.map_img, (rx, ry), 6, (0, 0, 255), -1)
         cv2.line(self.map_img, (rx, ry), (hx, hy), (0, 0, 0), 2)
 
+target_px = None
+
+def mouse_callback(event, x, y, flags, param):
+    global target_px
+    if event == cv2.EVENT_LBUTTONDOWN:
+        target_px = (x, y)
+        print(f"📌 Click target PX = {target_px}")
+
+# cv2.setMouseCallback("Lidar Map", mouse_callback)
+class MoveToPoint:
+    def __init__(self, mapper):
+        self.mapper = mapper
+        self.active = False
+        self.tx = None
+        self.ty = None
+
+        # trạng thái quay
+        self.rotating = False
+        self.target_theta = None   # góc mục tiêu khi đang quay (rad)
+        self.rotate_tolerance = math.radians(3.0)  # tolerance ~3 độ
+
+        # tham số di chuyển
+        self.dist_tolerance = 0.10  # 10 cm
+        self.rotate_cmd_sent = False
+
+    def set_target(self, px, py):
+        # convert PX → World (theo scale và CENTER của mapper)
+        self.tx = (px - self.mapper.CENTER[0]) / self.mapper.SCALE
+        self.ty = -(py - self.mapper.CENTER[1]) / self.mapper.SCALE
+        self.active = True
+        self.rotating = False
+        self.target_theta = None
+        self.rotate_cmd_sent = False
+        print(f"🎯 Target world: {self.tx:.2f}, {self.ty:.2f}")
+
+    def _angle_diff(self, a, b):
+        # trả về a - b trong [-pi, pi]
+        d = a - b
+        return math.atan2(math.sin(d), math.cos(d))
+
+    def update(self):
+        if not self.active:
+            return
+
+        # lấy trạng thái hiện tại từ mapper
+        x = self.mapper.x
+        y = self.mapper.y
+        th = self.mapper.theta  # mapper.theta phải là góc relative->global (đã xử lý initial)
+        # print("th: {th:2f} rad, {deg:.2f}°".format(th=th, deg=math.degrees(th)))
+        dx = self.tx - x
+        dy = self.ty - y
+        dist = math.hypot(dx, dy)
+        goal_ang = math.atan2(-dy, dx)
+        print(f"➡ Target angle: {math.degrees(goal_ang):.2f}")
+        # tính sai lệch góc cần xoay (goal_ang - current)
+        dth = self._angle_diff(goal_ang, th)
+        print("Δth:", f"{math.degrees(dth):.2f}°")
+        # ---------- PHASE 1: CHƯA XOAY, cần gửi lệnh xoay 1 lần ----------
+        if not self.rotating:
+            if abs(dth) > 0.15:  # > ~8.6 độ -> cần xoay
+                deg = int(round(abs(math.degrees(dth))))
+                # Hạn chế deg tối đa (nếu cần)
+                if deg == 0:
+                    deg = 1
+
+                # Nếu dth > 0 => goal nằm CCW so với heading hiện tại.
+                # Theo bạn: 'aXX' = xoay trái (CCW), 'dXX' = xoay phải (CW)
+                if dth > 0:
+                    cmd = f"d{deg}"
+                    # target_theta = current + deg (rad)
+                    self.target_theta = th + math.radians(deg)
+                else:
+                    cmd = f"a{deg}"
+                    self.target_theta = th - math.radians(deg)
+
+                # normalize target_theta về [-pi,pi]
+                self.target_theta = math.atan2(math.sin(self.target_theta), math.cos(self.target_theta))
+
+                # gửi lệnh xoay *một lần duy nhất*
+                ser.write((cmd + "\n").encode())
+                print("🔄 Sent rotate:", cmd, f" expect theta ~ {math.degrees(self.target_theta):.1f}°")
+                self.rotating = True
+                self.rotate_cmd_sent = True
+                return
+            # nếu không cần xoay (góc đã đủ nhỏ) -> tiếp sang di chuyển
+        else:
+            # ---------- PHASE 2: Đang chờ robot xoay tới target_theta ----------
+            # Nếu vẫn chưa set target_theta (vì deg rounding) thì fallback kiểm dth nhỏ
+            if self.target_theta is not None:
+                err = self._angle_diff(self.target_theta, th)
+                # nếu chưa đạt, đợi — không gửi lệnh quay lại
+                if abs(err) > self.rotate_tolerance:
+                    # chờ robot hoàn tất xoay (board sẽ cập nhật angle)
+                    return
+                else:
+                    # đã xoay xong
+                    print(f"✅ Rotate done. current theta: {math.degrees(th):.2f}°")
+                    self.rotating = False
+                    self.rotate_cmd_sent = False
+            else:
+                # nếu vì lý do nào đó không có target_theta, fallback dùng dth
+                if abs(dth) > 0.15:
+                    return
+                else:
+                    self.rotating = False
+
+        # ---------- PHASE 3: Di chuyển tiến về mục tiêu ----------
+        if dist > self.dist_tolerance:
+            # trước khi gửi 'w', bạn có thể check thêm obstacle bằng lidar/clean_map nếu muốn
+            ser.write(b"w\n")
+            print("⬆ Moving w, dist:", f"{dist:.2f} m")
+            return
+
+        # ---------- PHASE 4: Đến nơi ----------
+        ser.write(b"x\n")
+        print("🏁 Reached target!")
+        self.active = False
+        self.rotating = False
+        self.target_theta = None
+        self.rotate_cmd_sent = False
+
 
 # ==========================
 #  THREAD CHÍNH
@@ -230,7 +361,7 @@ class LidarMapper:
 mapper = LidarMapper()
 robot = Robot()
 pf = ParticleFilter(num_particles=200, map_img=mapper.map_img, initial_pos=None)
-
+mover = MoveToPoint(mapper)
 def serial_thread():
     while True:
         v, angle, lidar = read_csv_packet()
@@ -242,8 +373,14 @@ def serial_thread():
         mapper.draw_robot()
 
         display = mapper.map_img.copy()
-        cv2.imshow("Lidar Map", display)
+        global target_px
+        if target_px is not None:
+            mover.set_target(target_px[0], target_px[1])
+            target_px = None
 
+        mover.update()
+        cv2.imshow("Lidar Map", display)
+        cv2.setMouseCallback("Lidar Map", mouse_callback)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
